@@ -1,0 +1,96 @@
+---
+title: "Practical Machine Learning Project"
+author: "Thomas Yue"
+date: "March 19, 2015"
+output: html_document
+---
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. The data was collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). "
+
+#Data source
+The data for this project come from this source: <http://groupware.les.inf.puc-rio.br/har>. The training data were obtained from: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>. The test data were obtained from: <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>.  
+
+#Required packages
+```{r}
+set.seed(1234)
+library(ggplot2)
+library(gridExtra)
+library(caret)
+library(randomForest) #Random forest for classification and regression
+library(rpart) # Regressive Partitioning and Regression trees
+library(rpart.plot) # Decision Tree plot
+```
+
+#Data perprocessing
+```{r}
+#download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "trainingData.csv")
+#download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "testingData.csv")
+
+trainingData  <- read.csv("trainingData.csv", na.strings = c("NA","#DIV/0!", ""))
+testingData   <- read.csv('testingData.csv', na.strings = c("NA","#DIV/0!", ""))
+
+trainingData  <- trainingData[,colSums(is.na(trainingData)) == 0]
+testingData   <- testingData[,colSums(is.na(testingData)) == 0]
+
+#pick out the revelant columns only. Delete the column for user_name, raw_timestamp_part_1, raw_timestamp_part_,2 cvtd_timestamp, new_window, and  num_window (columns 1 to 7).
+
+trainingData  <- trainingData[,-c(1:7)]
+testingData   <- testingData[,-c(1:7)]
+summary(trainingData)
+summary(testingData)
+```
+
+#Partition the training data for cross-validation
+```{r}
+q  <- createDataPartition(y=trainingData$classe, p=0.75, list=FALSE)
+subTrainingData <- trainingData[q, ] 
+subTestingData  <- trainingData[-q, ]
+subTrainingData <- subTrainingData[complete.cases(subTrainingData),]
+subTestingData  <- subTestingData[complete.cases(subTestingData),]
+head(subTrainingData)
+head(subTestingData)
+```
+
+#Exploratory data analysis
+Conduct a preliminary analysis by plotting a histrogram of the classe variable.
+```{r}
+plot(subTrainingData$classe, main="Histrogram for classe", xlab="classe levels", ylab="Frequency")
+```
+
+The figure shown above illustrates while the classe variables B,C,D,E are similar in frequency, the classe variable A (frequency>4000) is signficantly higher than all the other classe variables.
+
+# Decision tree
+```{r}
+ decisionTree <- predict(rpart(classe ~ ., data=subTrainingData, method="class")
+ , subTestingData, type = "class")
+ confusionMatrix(decisionTree, subTestingData$classe) 
+ rpart.plot(rpart(classe ~ ., data=subTrainingData, method="class")
+ , main="Classification Tree", extra=102, under=TRUE, faclen=0)
+```
+# Random forest
+```{r}
+randomForest <- predict(randomForest(classe ~. , data=subTrainingData, method="class"), subTestingData, type = "class")
+confusionMatrix(randomForest, subTestingData$classe)
+```
+
+# Summary
+Our results demonstrate Random Forest outperformed Decision Trees with an accuracy for Random Forest 99.5% and 73.9% for Decision Trees. Hence, the random Forest is favored since the expected out-of-sample classification error is 0.5%, it is therefore very unlikely that the data for the test set will be missclassified.
+
+# Out of samples prediction
+```{r}
+predictfinal <- predict(randomForest(classe ~. , data=subTrainingData, method="class"), testingData, type="class")
+
+
+# Write files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+```
